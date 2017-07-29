@@ -1,6 +1,20 @@
-// CLIsweeper
-// main.c
-// Copyright (c) 2017 James Shiffer
+/*
+ CLIsweeper - Minesweeper for the command line.
+ Copyright (C) 2017  James Shiffer
+ 
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,6 +69,7 @@ typedef struct
     int cols;
     int mines;
     int moves;
+    int flags;
     game_state_t state;
     tile_t** board;
     cursor_t cursor;
@@ -99,6 +114,8 @@ void place_mines(game_t* g)
 {
     srand((unsigned) time(NULL));
     
+    int spawn_protection = 1;
+    
     int x, y = 0;
     for (int i = 0; i < g->mines; ++i)
     {
@@ -106,7 +123,7 @@ void place_mines(game_t* g)
         {
             x = rand() % g->cols;
             y = rand() % g->rows;
-        } while (x == g->cursor.x || y == g->cursor.y || g->board[x][y].type == MINE);
+        } while ((abs(x - g->cursor.x) <= spawn_protection && abs(y - g->cursor.y) <= spawn_protection) || g->board[x][y].type == MINE);
         
         g->board[x][y].type = MINE;
     }
@@ -144,9 +161,9 @@ void draw_board(game_t* g)
     mvprintw(0, 0, "+============+\n| CLIsweeper |\n+============+");
     if (has_colors()) attroff(COLOR_PAIR(6));
     
-    for (int i = 0; i < g->rows; ++i)
+    for (int i = 0; i < g->cols; ++i)
     {
-        for (int j = 0; j < g->cols; ++j)
+        for (int j = 0; j < g->rows; ++j)
         {
             char tile;
             if (has_colors())
@@ -247,15 +264,15 @@ void draw_board(game_t* g)
     {
         mvprintw(g->rows + 5, 0, "x:%d y:%d ", g->cursor.x + 1, g->cursor.y + 1);
     }
-    mvprintw(g->rows + 7, 0, "Moves: %d", g->moves);
+    mvprintw(g->rows + 7, 0, "Flags Left: %d ", g->mines - g->flags);
     
 }
 
 void clear_board(game_t* g)
 {
-    for (int i = 0; i < g->rows; ++i)
+    for (int i = 0; i < g->cols; ++i)
     {
-        for (int j = 0; j < g->cols; ++j)
+        for (int j = 0; j < g->rows; ++j)
         {
             g->board[i][j].type = UNDISCOVERED;
             g->board[i][j].flagged = false;
@@ -335,8 +352,13 @@ void reveal_surrounding_blanks(game_t* g, int x, int y)
     {
         if (g->board[x + 1][y + 1].type == UNDISCOVERED)
         {
-            // Blanks do not reveal diagonally
-            if (g->board[x + 1][y + 1].type != MINE && get_tile_number(g, x + 1, y + 1).type != BLANK)
+            // Blanks do not reveal diagonally (?)
+            if (get_tile_number(g, x + 1, y + 1).type == BLANK)
+            {
+                g->board[x + 1][y + 1].type = BLANK;
+                reveal_surrounding_blanks(g, x + 1, y + 1);
+            }
+            else if (g->board[x + 1][y + 1].type != MINE)// && get_tile_number(g, x + 1, y + 1).type != BLANK)
             {
                 g->board[x + 1][y + 1].type = get_tile_number(g, x + 1, y + 1).type;
             }
@@ -346,7 +368,12 @@ void reveal_surrounding_blanks(game_t* g, int x, int y)
     {
         if (g->board[x - 1][y + 1].type == UNDISCOVERED)
         {
-            if (g->board[x - 1][y + 1].type != MINE && get_tile_number(g, x - 1, y + 1).type != BLANK)
+            if (get_tile_number(g, x - 1, y + 1).type == BLANK)
+            {
+                g->board[x - 1][y + 1].type = BLANK;
+                reveal_surrounding_blanks(g, x - 1, y + 1);
+            }
+            else if (g->board[x - 1][y + 1].type != MINE)
             {
                 g->board[x - 1][y + 1].type = get_tile_number(g, x - 1, y + 1).type;
             }
@@ -356,7 +383,12 @@ void reveal_surrounding_blanks(game_t* g, int x, int y)
     {
         if (g->board[x + 1][y - 1].type == UNDISCOVERED)
         {
-            if (g->board[x + 1][y - 1].type != MINE && get_tile_number(g, x + 1, y - 1).type != BLANK)
+            if (get_tile_number(g, x + 1, y - 1).type == BLANK)
+            {
+                g->board[x + 1][y - 1].type = BLANK;
+                reveal_surrounding_blanks(g, x + 1, y - 1);
+            }
+            else if (g->board[x + 1][y - 1].type != MINE)
             {
                 g->board[x + 1][y - 1].type = get_tile_number(g, x + 1, y - 1).type;
             }
@@ -366,7 +398,12 @@ void reveal_surrounding_blanks(game_t* g, int x, int y)
     {
         if (g->board[x - 1][y - 1].type == UNDISCOVERED)
         {
-            if (g->board[x - 1][y - 1].type != MINE && get_tile_number(g, x - 1, y - 1).type != BLANK)
+            if (get_tile_number(g, x - 1, y - 1).type == BLANK)
+            {
+                g->board[x - 1][y - 1].type = BLANK;
+                reveal_surrounding_blanks(g, x - 1, y - 1);
+            }
+            else if (g->board[x - 1][y - 1].type != MINE)
             {
                 g->board[x - 1][y - 1].type = get_tile_number(g, x - 1, y - 1).type;
             }
@@ -400,7 +437,21 @@ game_state_t process_input(int c, game_t* g)
 
         case 'f':
             if ((g->board[g->cursor.x][g->cursor.y].type == UNDISCOVERED || g->board[g->cursor.x][g->cursor.y].type == MINE) && !g->board[g->cursor.x][g->cursor.y].questioned)
-                g->board[g->cursor.x][g->cursor.y].flagged = !g->board[g->cursor.x][g->cursor.y].flagged;
+            {
+                if (g->board[g->cursor.x][g->cursor.y].flagged)
+                {
+                    -- g->flags;
+                    g->board[g->cursor.x][g->cursor.y].flagged = false;
+                }
+                else
+                {
+                    if (g->flags < g->mines)
+                    {
+                        ++ g->flags;
+                        g->board[g->cursor.x][g->cursor.y].flagged = true;
+                    }
+                }
+            }
             break;
         
         case 'g':
@@ -460,13 +511,14 @@ void init_game(game_t* g, int rows, int cols, int mines)
 {
     g->state = IN_PROGRESS;
     g->moves = 0;
+    g->flags = 0;
     g->rows = rows;
     g->cols = cols;
     g->mines = mines;
     
-    g->board = (tile_t**) malloc(g->cols * sizeof(tile_t));
+    g->board = (tile_t**) malloc(g->cols * sizeof(tile_t*));
     
-    for (int i = 0; i < g->rows; i++)
+    for (int i = 0; i < g->cols; ++i)
     {
         g->board[i] = (tile_t*) malloc(g->rows * sizeof(tile_t));
     }
@@ -477,8 +529,24 @@ void init_game(game_t* g, int rows, int cols, int mines)
     clear_board(g);
 }
 
+void deinit_game(game_t* g)
+{
+    for (int i = 0; i < g->cols; ++i)
+    {
+        free(g->board[i]);
+    }
+    
+    free(g->board);
+}
+
 int main(int argc, char** argv)
 {
+    printf("CLIsweeper  Copyright (C) 2017  James Shiffer\nThis program comes with ABSOLUTELY NO WARRANTY; for details see LICENSE.\nThis is free software, and you are welcome to redistribute it under certain conditions; see LICENSE for details.\n\n");
+    
+    printf("Enter a difficulty (\"e\", \"m\", or \"h\"): ");
+    char difficulty = 'e';
+    difficulty = getchar();
+    
     initscr();
     savetty();
     cbreak();
@@ -490,14 +558,13 @@ int main(int argc, char** argv)
     clear();
 
     game_t game;
-    if (argc == 1)
-        init_game(&game, 9, 9, 10);
-    else if (argc == 2)
-        init_game(&game, atoi(argv[1]), 9, 10);
-    else if (argc == 3)
-        init_game(&game, atoi(argv[1]), atoi(argv[2]), 10);
+    
+    if (difficulty == 'h')
+        init_game(&game, 16, 30, 99);
+    else if (difficulty == 'm')
+        init_game(&game, 16, 16, 40);
     else
-        init_game(&game, atoi(argv[1]), atoi(argv[2]), atoi(argv[3]));
+        init_game(&game, 9, 9, 10);
     
     if (game.board == NULL) return 1;
 
@@ -524,7 +591,7 @@ int main(int argc, char** argv)
     
     while (getch() != 'q');
     
-    free(game.board);
+    deinit_game(&game);
     
     curs_set(true);
     endwin();
